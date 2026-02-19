@@ -264,6 +264,8 @@ body.zen-active .zen-floating-btn .icon-close { display: block; color: var(--tex
     cursor: pointer; transition: all 0.3s; box-shadow: var(--shadow);
     backdrop-filter: blur(5px);
     padding: 10px; /* Padding reduzido */
+    position: relative; /* Adicionado para barra de progresso */
+    overflow: hidden;   /* Adicionado para barra de progresso */
 }
 
 .sound-card:hover, .lofi-card:hover { transform: translateY(-5px); }
@@ -284,7 +286,6 @@ body.zen-active .zen-floating-btn .icon-close { display: block; color: var(--tex
 .volume-slider { -webkit-appearance: none; appearance: none; width: 100%; height: 3px; background: rgba(0,0,0,0.3); border-radius: 2px; outline: none; }
 .volume-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 10px; height: 10px; border-radius: 50%; background: var(--accent-color); cursor: pointer; border: 2px solid #fff; }
 
-.lofi-card { position: relative; overflow: hidden; }
 .loading-bar {
     position: absolute;
     top: 0; left: 0;
@@ -294,6 +295,9 @@ body.zen-active .zen-floating-btn .icon-close { display: block; color: var(--tex
     transition: width 0.2s ease;
     z-index: 10;
 }
+
+/* Atualizado para animar a barra em ambos os tipos de cartão */
+.sound-card.loading .loading-bar,
 .lofi-card.loading .loading-bar { width: 90%; animation: pulseLoad 1s infinite; }
 @keyframes pulseLoad { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
 

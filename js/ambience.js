@@ -14,7 +14,7 @@ const themesConfig = [
     { id: 'bg03', type: 'image', bg: 'url("img/bg-ambience-03.webp")', card: '#252525', text: '#e0e0e0', accent: '#4CAF50' }
 ];
 
-// Sons Ambientes (Pequenos - Carregam na memória)
+// Sons Ambientes (Carregam sob demanda agora - Lazy Loading)
 const soundsData = [
     { key: 'chuva', url: 'img/chuva.ogg' },
     { key: 'floresta', url: 'img/floresta.ogg' },
@@ -51,44 +51,29 @@ function initAudioContext() {
     if (audioCtx.state === 'suspended') audioCtx.resume();
 }
 
-async function preloadSounds() {
+// Removemos o preload pesado e apenas escondemos a tela de carregamento
+function hideLoader() {
     initAudioContext();
     const loader = document.getElementById('app-loader');
-    const progressBar = document.getElementById('progress-bar');
-    const total = soundsData.length;
-    let loaded = 0;
-
-    const loadPromises = soundsData.map(async (data) => {
-        try {
-            const resp = await fetch(data.url);
-            const buffer = await audioCtx.decodeAudioData(await resp.arrayBuffer());
-            sounds[data.key] = { 
-                buffer: buffer, 
-                source: null, 
-                gain: null,
-                isPlaying: false
-            };
-            loaded++;
-            if(progressBar) progressBar.style.width = `${(loaded / total) * 100}%`;
-        } catch (e) {
-            console.error(`Erro ao carregar ${data.key}`, e);
-        }
-    });
-
-    await Promise.all(loadPromises);
-    
     if(loader) {
         loader.style.opacity = '0';
         setTimeout(() => loader.style.display = 'none', 500);
     }
 }
 
-// --- MIXER AMBIENTES (Memória) ---
-function toggleSound(key, card) {
-    const sound = sounds[key];
+// --- MIXER AMBIENTES (Lazy Loading com Buffer) ---
+async function toggleSound(key, card) {
+    initAudioContext();
     const slider = card.querySelector('.volume-slider');
 
+    // Se o som ainda não existe no nosso objeto, criamos a base dele
+    if (!sounds[key]) {
+        sounds[key] = { buffer: null, source: null, gain: null, isPlaying: false, isLoading: false };
+    }
+    const sound = sounds[key];
+
     if (sound.isPlaying) {
+        // Lógica para desligar o som
         if(sound.gain) sound.gain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.1);
         setTimeout(() => {
             if(sound.source) sound.source.stop();
@@ -97,8 +82,28 @@ function toggleSound(key, card) {
         }, 200);
         card.classList.remove('active');
     } else {
-        if (!sound.buffer) return; 
+        // Se o áudio ainda não foi baixado, baixamos agora
+        if (!sound.buffer) {
+            if (sound.isLoading) return; // Evita cliques duplicados durante o download
+            sound.isLoading = true;
+            card.classList.add('loading'); // Animação de carregando
+
+            try {
+                const soundData = soundsData.find(s => s.key === key);
+                const resp = await fetch(soundData.url);
+                const arrayBuffer = await resp.arrayBuffer();
+                sound.buffer = await audioCtx.decodeAudioData(arrayBuffer);
+            } catch (e) {
+                console.error(`Erro ao carregar ${key}`, e);
+                sound.isLoading = false;
+                card.classList.remove('loading');
+                return;
+            }
+            sound.isLoading = false;
+            card.classList.remove('loading');
+        }
         
+        // Toca o som após estar carregado
         const src = audioCtx.createBufferSource();
         src.buffer = sound.buffer;
         src.loop = true;
@@ -114,7 +119,7 @@ function toggleSound(key, card) {
     }
 }
 
-// --- LO-FI (Streaming - CORRIGIDO) ---
+// --- LO-FI (Streaming) ---
 function toggleLofi(key, card) {
     initAudioContext();
     const slider = card.querySelector('.volume-slider');
@@ -173,11 +178,9 @@ function stopCurrentLofi() {
         // Pausa o áudio
         currentLofiState.audioElement.pause();
         
-        // --- CORREÇÃO AQUI ---
         // Força o navegador a soltar o buffer e fechar a conexão TCP
         currentLofiState.audioElement.src = ""; 
         currentLofiState.audioElement.load(); 
-        // ---------------------
 
         // Limpa referências
         currentLofiState.audioElement = null; 
@@ -191,9 +194,9 @@ function stopCurrentLofi() {
     currentLofiState.key = null;
 }
 
-// Inicialização
+// Inicialização alterada
 window.addEventListener('DOMContentLoaded', () => {
-    preloadSounds(); // Apenas ambientes curtos
+    hideLoader(); 
     loadSavedData();
     renderThemeSwitcher();
 });
@@ -294,7 +297,6 @@ document.querySelectorAll('.lofi-card').forEach(card => {
     const slider = card.querySelector('.volume-slider');
     if(slider) {
         slider.addEventListener('input', e => {
-            // Ajusta volume apenas se este card estiver tocando
             if (currentLofiState.key === card.dataset.lofi && currentLofiState.gain) {
                 currentLofiState.gain.gain.setTargetAtTime(e.target.value, audioCtx.currentTime, 0.1);
             }
